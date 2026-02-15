@@ -1,0 +1,24 @@
+{
+  "name": "@whitewall-os/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Whitewall OS — AI agents verify other AI agents",
+  "type": "module",
+  "bin": {
+    "whitewall-os-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@whitewall-os/sdk": "file:../sdk",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0"
+  },
+  "license": "MIT"
+}
