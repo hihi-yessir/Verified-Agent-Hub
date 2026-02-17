@@ -7,14 +7,11 @@ import {IPolicyEngine} from "./vendor/interfaces/IPolicyEngine.sol";
 // Read-only interfaces for on-chain state verification
 interface IIdentityRegistryReader {
     function ownerOf(uint256 tokenId) external view returns (address);
+    function getMetadata(uint256 agentId, string memory metadataKey) external view returns (bytes memory);
 }
 
-interface IValidationRegistryReader {
-    function getSummary(
-        uint256 agentId,
-        address[] calldata validatorAddresses,
-        string calldata tag
-    ) external view returns (uint64 count, uint8 avgResponse);
+interface IWorldIDValidatorReader {
+    function isHumanVerified(uint256 agentId) external view returns (bool);
 }
 
 /**
@@ -27,17 +24,15 @@ interface IValidationRegistryReader {
  *   1. CRE report says approved == true
  *   2. tier >= requiredTier
  *   3. IdentityRegistry: agent is registered (ownerOf doesn't revert)
- *   4. ValidationRegistry: agent has HUMAN_VERIFIED validation from WorldIDValidator
- *
- * Bonding is NOT handled here — CRE writes directly to ValidationRegistry.
+ *   4. IdentityRegistry: agent has "humanVerified" metadata (set by WorldIDValidator)
+ *   5. WorldIDValidator: independently confirms verification (tamper-proof — cannot be faked via setMetadata)
  */
 contract HumanVerifiedPolicy is Policy {
     // ── Storage ──
     /// @custom:storage-location erc7201:whitewall-os.HumanVerifiedPolicy
     struct HumanVerifiedPolicyStorage {
         IIdentityRegistryReader identityRegistry;
-        IValidationRegistryReader validationRegistry;
-        address worldIdValidator;
+        IWorldIDValidatorReader worldIdValidator;
         uint8 requiredTier;
     }
 
@@ -54,20 +49,18 @@ contract HumanVerifiedPolicy is Policy {
     // ── Initialization ──
 
     /**
-     * @dev configParams = abi.encode(address identityRegistry, address validationRegistry, address worldIdValidator, uint8 requiredTier)
+     * @dev configParams = abi.encode(address identityRegistry, address worldIdValidator, uint8 requiredTier)
      */
     function configure(bytes calldata configParams) internal override {
         (
             address identityRegistry_,
-            address validationRegistry_,
             address worldIdValidator_,
             uint8 requiredTier_
-        ) = abi.decode(configParams, (address, address, address, uint8));
+        ) = abi.decode(configParams, (address, address, uint8));
 
         HumanVerifiedPolicyStorage storage $ = _getStorage();
         $.identityRegistry = IIdentityRegistryReader(identityRegistry_);
-        $.validationRegistry = IValidationRegistryReader(validationRegistry_);
-        $.worldIdValidator = worldIdValidator_;
+        $.worldIdValidator = IWorldIDValidatorReader(worldIdValidator_);
         $.requiredTier = requiredTier_;
     }
 
@@ -111,12 +104,19 @@ contract HumanVerifiedPolicy is Policy {
             revert IPolicyEngine.PolicyRejected("Agent not registered");
         }
 
-        // Check 4: on-chain — agent must have HUMAN_VERIFIED validation
-        address[] memory validators = new address[](1);
-        validators[0] = $.worldIdValidator;
-        (uint64 count,) = $.validationRegistry.getSummary(agentId, validators, "HUMAN_VERIFIED");
-        if (count == 0) {
-            revert IPolicyEngine.PolicyRejected("No human verification bond on-chain");
+        // Check 4: on-chain — agent must have humanVerified metadata (set by WorldIDValidator)
+        bytes memory humanMeta = $.identityRegistry.getMetadata(agentId, "humanVerified");
+        if (humanMeta.length == 0) {
+            revert IPolicyEngine.PolicyRejected("Agent not human-verified on-chain");
+        }
+
+        // Check 5: on-chain — WorldIDValidator independently confirms (tamper-proof)
+        // Metadata alone is insufficient: agent owner could approve themselves and
+        // call setMetadata("humanVerified", ...) directly, bypassing the ZK proof.
+        // WorldIDValidator's internal state can only be set via verifyAndSetHumanTag()
+        // which requires a valid World ID ZK proof.
+        if (!$.worldIdValidator.isHumanVerified(agentId)) {
+            revert IPolicyEngine.PolicyRejected("WorldIDValidator: verification not confirmed");
         }
 
         return IPolicyEngine.PolicyResult.Allowed;
@@ -132,11 +132,7 @@ contract HumanVerifiedPolicy is Policy {
         return address(_getStorage().identityRegistry);
     }
 
-    function getValidationRegistry() external view returns (address) {
-        return address(_getStorage().validationRegistry);
-    }
-
     function getWorldIdValidator() external view returns (address) {
-        return _getStorage().worldIdValidator;
+        return address(_getStorage().worldIdValidator);
     }
 }
