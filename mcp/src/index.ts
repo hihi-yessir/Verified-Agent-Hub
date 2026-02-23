@@ -20,7 +20,6 @@ function formatStatus(agentId: string, status: AgentStatus): string {
     `  Tier:            ${status.tier}`,
     `  Owner:           ${status.owner}`,
     `  Agent Wallet:    ${status.agentWallet}`,
-    `  Validations:     ${status.validationCount}`,
   ].join("\n");
 }
 
@@ -93,12 +92,13 @@ server.registerTool(
   async () => {
     const config = wos.getPolicyConfig();
     const text = [
-      "Whitewall OS Policy Config (read from on-chain HumanVerifiedPolicy):",
-      `  Identity Registry:    ${config.identityRegistry}`,
-      `  Validation Registry:  ${config.validationRegistry}`,
-      `  World ID Validator:   ${config.worldIdValidator}`,
-      `  Required Tier:        ${config.requiredTier}`,
-      `  Chain:                Base Sepolia (84532)`,
+      "Whitewall OS Policy Config (read from on-chain TieredPolicy):",
+      `  Identity Registry:      ${config.identityRegistry}`,
+      `  World ID Validator:     ${config.worldIdValidator}`,
+      `  Stripe KYC Validator:   ${config.stripeKYCValidator}`,
+      `  Plaid Credit Validator: ${config.plaidCreditValidator}`,
+      `  Min Credit Score:       ${config.minCreditScore}`,
+      `  Chain:                  Base Sepolia (84532)`,
     ].join("\n");
 
     return { content: [{ type: "text" as const, text }] };
