@@ -44,3 +44,9 @@ Thumbs.db
 
 # Internal notes (not for repo)
 PRESENTATION.md
+
+# CRE secrets config (key names only, but looks sketchy)
+secrets.yaml
+
+# Upstream ERC-8004 presigned upgrade txs
+triple-presigned-upgrade-chain-31337.json
